@@ -1,1 +1,350 @@
-# -
+# -<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>法硕备考打卡｜可编辑在线版</title>
+<style>
+*{box-sizing:border-box;font-family:system-ui,sans-serif;}
+body{max-width:1100px;margin:20px auto;padding:0 16px;background:#f5f7fa;color:#222;}
+.card{background:#fff;border-radius:14px;padding:20px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,0.08);}
+h2{margin:0 0 12px 0;color:#253b58;font-size:19px;}
+.ctrl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}
+button{padding:8px 14px;border:none;border-radius:8px;background:#3478f6;color:#fff;cursor:pointer;font-size:14px;}
+button.sec{background:#868e96;}
+button.danger{background:#e03131;}
+select, input, textarea{border:1px solid #ddd;border-radius:8px;padding:8px;font-size:14px;}
+textarea{width:100%;resize:vertical;}
+.task-row{border-bottom:1px solid #eee;padding:10px 0;display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;}
+.task-content{min-height:44px;}
+.stat-row{background:#e8f0fe;padding:12px;border-radius:10px;margin-bottom:12px;}
+.log{white-space:pre-wrap;background:#f8f9fa;padding:12px;border-radius:10px;max-height:300px;overflow:auto;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>📚 法硕备考打卡（可编辑 · 周一至周日）</h2>
+  <div class="ctrl">
+    <select id="daySelect"></select>
+    <button onclick="loadDay()">加载日期</button>
+    <button onclick="saveDay()">保存当日</button>
+    <button onclick="addTask()">新增任务</button>
+    <button onclick="showAdvice()">规则与阶段</button>
+    <button onclick="showLog()">打卡日志</button>
+    <button onclick="exportData()">导出备份</button>
+    <button onclick="importData()">导入备份</button>
+    <button class="danger" onclick="clearAll()">清空本地记录</button>
+  </div>
+  <div class="stat-row">
+    <div>✅ 完成：<span id="okCnt">0</span> &nbsp; ⚠️ 部分：<span id="warnCnt">0</span> &nbsp; ❌ 未完成：<span id="noCnt">0</span></div>
+    <div>完成率：<span id="rate">0%</span></div>
+    <div>卡点备注：<textarea id="noteInput" rows="2" placeholder="记录卡点、精力、加班情况"></textarea></div>
+    <input type="file" id="importFile" accept=".json" style="display:none">
+  </div>
+  <div id="taskWrap"></div>
+</div>
+
+<div class="card">
+  <h2>📌 调整建议</h2>
+  <div id="adviceBox" class="log"></div>
+</div>
+
+<div class="card">
+  <h2>📜 历史记录</h2>
+  <div id="logBox" class="log"></div>
+</div>
+
+<script>
+function genDateList(){
+  const arr = [];
+  let d = new Date(2026, 10, 18);
+  const end = new Date(2026, 11, 18);
+  while(d <= end){
+    const m = String(d.getMonth()+1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    arr.push(`${m}.${dd}`);
+    d.setDate(d.getDate()+1);
+  }
+  return arr;
+}
+const dateList = genDateList();
+
+const weekTemplate = {
+  mon: [
+    { time: "05:30–07:00", content: "刑法滚动背诵，重点总则/分则高频简答" },
+    { time: "上午摸鱼", content: "民法选择题复盘 + 05–19 阅读二刷批注" },
+    { time: "下午摸鱼", content: "宪法考点梳理 + 肖八选择一套，整理错题" },
+    { time: "晚间主场", content: "宪法背诵 + 民法新章节推进" },
+    { time: "英语", content: "模板默写 + 扇贝单词复盘" },
+    { time: "机动", content: "刑法错题、导图复盘" }
+  ],
+  tue: [
+    { time: "05:30–07:00", content: "民法昨日内容滚动背诵" },
+    { time: "上午摸鱼", content: "刑法真题选择复盘 + 05–19 阅读复盘" },
+    { time: "下午摸鱼", content: "法理薄弱点标记 + 政治错题回看" },
+    { time: "晚间主场", content: "法理背诵 + 民法推进" },
+    { time: "英语", content: "小作文模板默写 + 单词" },
+    { time: "机动", content: "思维导图串联" }
+  ],
+  wed: [
+    { time: "05:30–07:00", content: "刑法背诵复盘" },
+    { time: "上午摸鱼", content: "民法真题选择 + 阅读复盘" },
+    { time: "下午摸鱼", content: "法理巩固 + 肖八一套选择" },
+    { time: "晚间主场", content: "法理巩固背诵 + 民法新课" },
+    { time: "英语", content: "大作文模板改写默写" },
+    { time: "机动", content: "补薄弱点" }
+  ],
+  thu: [
+    { time: "05:30–07:00", content: "民法背诵" },
+    { time: "上午摸鱼", content: "刑法选择刷题 + 阅读复盘" },
+    { time: "下午摸鱼", content: "宪法导图标记考点 + 政治错题" },
+    { time: "晚间主场", content: "宪法背诵 + 民法推进" },
+    { time: "英语", content: "模板保温 + 单词" },
+    { time: "机动", content: "导图复盘" }
+  ],
+  fri: [
+    { time: "05:30–07:00", content: "刑法复盘背诵" },
+    { time: "上午摸鱼", content: "民法选择 + 阅读复盘" },
+    { time: "下午摸鱼", content: "法理/宪法薄弱回看 + 肖八选择" },
+    { time: "晚间主场", content: "专业课复盘背诵 + 民法推进" },
+    { time: "英语", content: "模板 + 单词" },
+    { time: "晚间可选", content: "法制史高频简答，过载直接删除" },
+    { time: "机动", content: "休息或补背诵" }
+  ],
+  sat: [
+    { time: "05:30–07:00", content: "刑法大轮复盘" },
+    { time: "上午", content: "民法集中补进度" },
+    { time: "14:00–16:00", content: "英语整套限时模考（依次：24、25、26）" },
+    { time: "考完复盘", content: "阅读精读、生词录入、新题型技巧整理" },
+    { time: "晚间", content: "法理+宪法复盘、修改作文、优化模板" },
+    { time: "政治", content: "肖八错题复盘" },
+    { time: "可选", content: "法制史 / 法硕写作一本通片段（达标才开启）" }
+  ],
+  sun: [
+    { time: "05:30–07:00", content: "民法滚动背诵" },
+    { time: "上午", content: "四科导图串框架、本周错题整理" },
+    { time: "下午", content: "法理宪法薄弱补背" },
+    { time: "英语", content: "大小作文模板默写保温、单词复盘" },
+    { time: "晚间", content: "减负休息，为下周蓄力" }
+  ]
+};
+
+function getWeekKey(dayStr){
+  const [m, d] = dayStr.split(".").map(Number);
+  const dt = new Date(2026, m - 1, d);
+  const w = dt.getDay();
+  if(w === 1) return "mon";
+  if(w === 2) return "tue";
+  if(w === 3) return "wed";
+  if(w === 4) return "thu";
+  if(w === 5) return "fri";
+  if(w === 6) return "sat";
+  return "sun";
+}
+
+function getPhase(dayStr){
+  const [m, d] = dayStr.split(".").map(Number);
+  const num = m * 100 + d;
+  if(num <= 1206) return "A：一轮背诵 + 模板 + 模考";
+  if(num <= 1213) return "B：二轮滚动 + 主观题专项";
+  return "C：冲刺押题 + 全真复盘";
+}
+
+function getStore(){
+  const raw = localStorage.getItem("fashuoStudy");
+  return raw ? JSON.parse(raw) : {};
+}
+function saveStore(obj){
+  localStorage.setItem("fashuoStudy", JSON.stringify(obj));
+}
+
+function initSelect(){
+  const sel = document.getElementById("daySelect");
+  sel.innerHTML = "";
+  dateList.forEach(d => {
+    const opt = document.createElement("option");
+    opt.value = d;
+    opt.innerText = d;
+    sel.appendChild(opt);
+  });
+}
+
+function loadDay(){
+  const day = document.getElementById("daySelect").value;
+  const store = getStore();
+  const record = store[day] || null;
+  let tasks;
+  if(record && record.tasks){
+    tasks = record.tasks;
+  } else {
+    const wk = getWeekKey(day);
+    tasks = weekTemplate[wk].map(t => ({
+      time: t.time,
+      content: t.content,
+      status: "ok"
+    }));
+  }
+  document.getElementById("noteInput").value = (record && record.note) || "";
+  renderTasks(tasks);
+  calcStats(tasks);
+  document.getElementById("adviceBox").innerText = `【${day}｜${getPhase(day)}】加载完成，修改内容后保存。`;
+}
+
+function renderTasks(tasks){
+  const wrap = document.getElementById("taskWrap");
+  wrap.innerHTML = "";
+  tasks.forEach((t, idx) => {
+    const div = document.createElement("div");
+    div.className = "task-row";
+    div.innerHTML = `
+      <div>
+        <strong>${t.time}</strong>
+        <textarea class="task-content" data-idx="${idx}">${t.content}</textarea>
+      </div>
+      <select class="stat-sel" data-idx="${idx}">
+        <option value="ok" ${t.status === "ok" ? "selected" : ""}>✅</option>
+        <option value="warn" ${t.status === "warn" ? "selected" : ""}>⚠️</option>
+        <option value="no" ${t.status === "no" ? "selected" : ""}>❌</option>
+      </select>
+      <button onclick="removeTask(${idx})" class="sec">删除</button>
+    `;
+    wrap.appendChild(div);
+  });
+}
+
+function readTasks(){
+  const rows = document.querySelectorAll(".task-row");
+  const arr = [];
+  rows.forEach(row => {
+    const time = row.querySelector("strong").innerText;
+    const content = row.querySelector(".task-content").value.trim();
+    const status = row.querySelector(".stat-sel").value;
+    arr.push({ time, content, status });
+  });
+  return arr;
+}
+
+function calcStats(tasks){
+  let ok = 0, warn = 0, no = 0;
+  tasks.forEach(t => {
+    if(t.status === "ok") ok++;
+    else if(t.status === "warn") warn++;
+    else no++;
+  });
+  document.getElementById("okCnt").innerText = ok;
+  document.getElementById("warnCnt").innerText = warn;
+  document.getElementById("noCnt").innerText = no;
+  const total = tasks.length;
+  const rate = total ? Math.round(ok / total * 100) : 0;
+  document.getElementById("rate").innerText = rate + "%";
+}
+
+function saveDay(){
+  const day = document.getElementById("daySelect").value;
+  const tasks = readTasks();
+  const note = document.getElementById("noteInput").value.trim();
+  const store = getStore();
+  store[day] = { tasks, note, savedAt: new Date().toLocaleString() };
+  saveStore(store);
+  calcStats(tasks);
+  let advice = `【${day}｜${getPhase(day)}】已保存。\n`;
+  const bad = tasks.filter(t => t.status === "warn" || t.status === "no");
+  const hasMinFa = bad.some(t => t.content.includes("民法"));
+  const hasEngBad = bad.some(t => t.content.includes("英语") || t.content.includes("作文") || t.content.includes("单词"));
+  if(bad.length >= 2){
+    advice += "⚠️ 多项未达标：砍掉政治复盘，机动时间转向背诵；法制史优先移除。\n";
+  }
+  if(hasMinFa){
+    advice += "⚠️ 民法薄弱：暂停法理、宪法新增背诵，晚间主场倾斜民法。\n";
+  }
+  if(hasEngBad){
+    advice += "⚠️ 英语不稳：暂停新增阅读，保留单词与模板默写保温。\n";
+  }
+  if(bad.length === 0){
+    advice += "✅ 进度稳定；刑法、民法持续达标后，可在机动时段开启法硕写作一本通片段。";
+  }
+  document.getElementById("adviceBox").innerText = advice;
+  showLog();
+}
+
+function addTask(){
+  const tasks = readTasks();
+  tasks.push({ time: "新增时段", content: "填写具体学习内容，随时修改", status: "ok" });
+  renderTasks(tasks);
+  calcStats(tasks);
+}
+function removeTask(idx){
+  const tasks = readTasks();
+  tasks.splice(idx, 1);
+  renderTasks(tasks);
+  calcStats(tasks);
+}
+
+function showAdvice(){
+  document.getElementById("adviceBox").innerText = `
+阶段划分
+A：11.18–12.06｜一轮背诵、作文模板、三套英语模考
+B：12.07–12.13｜二轮滚动、主观题专项
+C：12.14–12.18｜冲刺押题、全真复盘
+
+优先级：专业课 > 英语 > 政治；法制史最先删减；周六下午固定英语模考，顺序 24/25/26。
+每一行时段、学习内容都可以直接编辑，支持增删任务。
+  `.trim();
+}
+
+function showLog(){
+  const store = getStore();
+  const box = document.getElementById("logBox");
+  const keys = Object.keys(store).sort();
+  if(keys.length === 0){
+    box.innerText = "暂无记录";
+    return;
+  }
+  let out = "==== 打卡记录 ====\n";
+  keys.forEach(k => {
+    const r = store[k];
+    const statStr = r.tasks.map(t => t.status === "ok" ? "✅" : t.status === "warn" ? "⚠️" : "❌").join("");
+    out += `${k}：${statStr}｜备注：${r.note || "无"}\n`;
+  });
+  box.innerText = out;
+}
+
+function exportData(){
+  const data = getStore();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "fashuo-backup.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importData(){
+  const fileInput = document.getElementById("importFile");
+  fileInput.onchange = async e => {
+    const file = e.target.files[0];
+    if(!file) return;
+    const text = await file.text();
+    const data = JSON.parse(text);
+    saveStore(data);
+    alert("导入成功");
+    showLog();
+  };
+  fileInput.click();
+}
+
+function clearAll(){
+  if(confirm("确认清空全部本地记录？不可恢复！")){
+    localStorage.removeItem("fashuoStudy");
+    document.getElementById("taskWrap").innerHTML = "";
+    document.getElementById("logBox").innerText = "已清空";
+    document.getElementById("adviceBox").innerText = "";
+  }
+}
+
+initSelect();
+showLog();
+</script>
+</body>
+</html>
